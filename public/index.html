@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FloodGuard - Flash Flood Prediction & Early Warning System</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Chart.js for Hydrological Graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <i class="fa-solid fa-water-ladder logo-icon"></i>
+        <div class="brand-text">
+          <span class="brand-title">FloodGuard</span>
+          <span class="brand-subtitle">Global Watershed Watch</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item" data-view="view-landing">
+          <i class="fa-solid fa-house"></i>
+          <span>Overview</span>
+        </button>
+        <button class="nav-item active" data-view="view-dashboard">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Live Dashboard</span>
+        </button>
+        <button class="nav-item" data-view="view-prediction">
+          <i class="fa-solid fa-brain"></i>
+          <span>Risk Prediction</span>
+        </button>
+        <button class="nav-item" data-view="view-map">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>Flood Map</span>
+        </button>
+        <button class="nav-item" data-view="view-warning">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>Early Warning</span>
+        </button>
+        <button class="nav-item" data-view="view-alerts">
+          <i class="fa-solid fa-bell"></i>
+          <span>Alert Center</span>
+          <span class="badge" id="alertBadge">SAFE</span>
+        </button>
+        <button class="nav-item" data-view="view-emergency">
+          <i class="fa-solid fa-truck-medical"></i>
+          <span>Emergency Response</span>
+        </button>
+        <!-- NEWS NAVIGATION ITEM -->
+        <button class="nav-item" data-view="view-news">
+          <i class="fa-solid fa-newspaper"></i>
+          <span>Global News</span>
+          <span class="badge red">LIVE</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator online">
+          <span class="pulse-dot"></span>
+          <span>NOAA/DWD Telemetry: Active</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Panel -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="location-tag">
+          <i class="fa-solid fa-location-dot"></i>
+          <span>Target Region: <strong id="topbarRegionName">Imphal Valley, Manipur, India</strong></span>
+        </div>
+        <div class="topbar-actions">
+          <div class="live-clock" id="liveClock">00:00:00 UTC</div>
+          <button class="btn btn-danger-soft" id="emergencySosBtn">
+            <i class="fa-solid fa-phone"></i> Emergency SOS
+          </button>
+        </div>
+      </header>
+
+      <div class="views-wrapper">
+        <!-- 1. Landing View -->
+        <section id="view-landing" class="view-panel">
+          <div class="hero-card">
+            <div class="hero-content">
+              <span class="pill-badge">Global Earth Intelligence</span>
+              <h1>Flash Flood Prediction &amp; Early Warning System</h1>
+              <p>Predictive runoff hydrology powered by open meteorological models and automated downhill surge detection.</p>
+              <div class="hero-actions">
+                <button class="btn btn-primary" onclick="switchTab('view-dashboard')">Live Environmental Feed</button>
+                <button class="btn btn-outline" onclick="switchTab('view-prediction')">Simulation Sandbox</button>
+                <button class="btn btn-danger" onclick="switchTab('view-warning')">Emergency Protocols</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-grid">
+            <div class="flow-card">
+              <div class="step-num">01</div>
+              <i class="fa-solid fa-globe flow-icon"></i>
+              <h3>Global Search</h3>
+              <p>Search any place across the globe with street and valley satellite zoom.</p>
+            </div>
+            <div class="flow-card">
+              <div class="step-num">02</div>
+              <i class="fa-solid fa-cloud-showers-water flow-icon"></i>
+              <h3>Real-Time Sync</h3>
+              <p>Direct weather feeds from NOAA, DWD, and ECMWF open hydrology APIs.</p>
+            </div>
+            <div class="flow-card">
+              <div class="step-num">03</div>
+              <i class="fa-solid fa-calculator flow-icon"></i>
+              <h3>Predictive Risk</h3>
+              <p>Calculates dynamic flood probability and projected downstream water levels.</p>
+            </div>
+            <div class="flow-card">
+              <div class="step-num">04</div>
+              <i class="fa-solid fa-newspaper flow-icon"></i>
+              <h3>Global News</h3>
+              <p>Real-time unfolding incident tracking and international breaking articles.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Live Dashboard View (Default Active) -->
+        <section id="view-dashboard" class="view-panel active">
+          <div class="section-header">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <h2>Live Hydrological Dashboard</h2>
+                <span class="subtitle">Live feeds from Open-Meteo (NOAA GFS / DWD ICON Open Data)</span>
+              </div>
+              <button class="btn btn-sm btn-outline" id="refreshWeatherBtn">
+                <i class="fa-solid fa-rotate"></i> Refresh Telemetry
+              </button>
+            </div>
+          </div>
+
+          <!-- GLOBAL SEARCH BAR & SATELLITE MAP -->
+          <div class="world-map-wrapper panel-box">
+            <div class="search-bar-container">
+              <div class="search-input-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input 
+                  type="text" 
+                  id="globalSearchInput" 
+                  placeholder="Search any place in the world (e.g. Imphal, Sylhet, Valencia, Tokyo, Wayanad)..." 
+                  autocomplete="off"
+                />
+                <button class="btn btn-primary btn-sm" id="searchSubmitBtn">
+                  <i class="fa-solid fa-crosshairs"></i> Search &amp; Analyze
+                </button>
+              </div>
+              <div class="search-suggestions" id="searchSuggestions"></div>
+            </div>
+
+            <!-- Fast Location Presets -->
+            <div class="preset-pills">
+              <span class="preset-label"><i class="fa-solid fa-bolt"></i> Quick Basins:</span>
+              <button class="pill-btn" onclick="searchLocationByName('Imphal, Manipur, India')">Imphal Valley</button>
+              <button class="pill-btn" onclick="searchLocationByName('Sylhet, Bangladesh')">Sylhet Basin</button>
+              <button class="pill-btn" onclick="searchLocationByName('Valencia, Spain')">Valencia Basin</button>
+              <button class="pill-btn" onclick="searchLocationByName('Wayanad, Kerala, India')">Wayanad Foothills</button>
+              <button class="pill-btn" onclick="searchLocationByName('Tokyo, Japan')">Tokyo Bay</button>
+              <button class="pill-btn" onclick="searchLocationByName('Derna, Libya')">Derna Wadi</button>
+            </div>
+
+            <!-- Deep Satellite Map -->
+            <div class="dashboard-map-container">
+              <div id="worldDashboardMap"></div>
+              <div class="map-overlay-badge">
+                <i class="fa-solid fa-satellite"></i> High-Res Open Satellite Terrain &bull; Zoom up to 19x
+              </div>
+            </div>
+          </div>
+
+          <!-- Hydrological Metric Cards -->
+          <div class="metrics-row">
+            <div class="metric-card red-border">
+              <div class="card-icon"><i class="fa-solid fa-water"></i></div>
+              <div class="card-info">
+                <span class="label">River Basin Crest</span>
+                <span class="value text-red" id="basinStatus">4.2 m</span>
+                <span class="subtext" id="basinSubtext">Warning threshold: 3.5 m</span>
+              </div>
+            </div>
+            <div class="metric-card blue-border">
+              <div class="card-icon"><i class="fa-solid fa-cloud-rain"></i></div>
+              <div class="card-info">
+                <span class="label">Precipitation Rate</span>
+                <span class="value" id="liveRainfall">-- mm</span>
+                <span class="subtext" id="rainCategory">Connecting to NOAA/DWD...</span>
+              </div>
+            </div>
+            <div class="metric-card green-border">
+              <div class="card-icon"><i class="fa-solid fa-temperature-half"></i></div>
+              <div class="card-info">
+                <span class="label">Ambient Temp</span>
+                <span class="value" id="liveTemp">-- °C</span>
+                <span class="subtext" id="liveHumidity">Humidity: --%</span>
+              </div>
+            </div>
+            <div class="metric-card purple-border">
+              <div class="card-icon"><i class="fa-solid fa-wind"></i></div>
+              <div class="card-info">
+                <span class="label">Wind Speed &amp; Dir</span>
+                <span class="value" id="liveWind">-- m/s</span>
+                <span class="subtext" id="windDirection">Bearing: --°</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart & Gauge -->
+          <div class="grid-2-col">
+            <div class="panel-box">
+              <div class="panel-head">
+                <h3 id="chartRegionTitle">Rainfall vs Runoff Forecast</h3>
+                <span class="chip" id="weatherSourceBadge">Sync: NOAA/DWD Models</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="runoffChart"></canvas>
+              </div>
+            </div>
+
+            <div class="panel-box gauge-center">
+              <div class="panel-head">
+                <h3>Regional Flash Flood Risk</h3>
+              </div>
+              <div class="gauge-wrapper">
+                <div class="circular-progress" id="gaugeProgress">
+                  <div class="inner-circle">
+                    <span class="gauge-percent" id="floodGaugeValue">--%</span>
+                    <span class="gauge-status" id="floodGaugeStatus">ANALYZING</span>
+                  </div>
+                </div>
+              </div>
+              <div class="breakdown-list">
+                <div class="breakdown-item">
+                  <span>Downhill Runoff Volume</span>
+                  <div class="progress-bar"><div class="fill" id="barRunoff" style="width: 50%;"></div></div>
+                  <span id="labelRunoff">50%</span>
+                </div>
+                <div class="breakdown-item">
+                  <span>Soil Moisture Saturation</span>
+                  <div class="progress-bar"><div class="fill" id="barSoil" style="width: 50%;"></div></div>
+                  <span id="labelSoil">50%</span>
+                </div>
+                <div class="breakdown-item">
+                  <span>Precipitation Inflow</span>
+                  <div class="progress-bar"><div class="fill yellow" id="barRain" style="width: 50%;"></div></div>
+                  <span id="labelRain">50%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Risk Prediction View -->
+        <section id="view-prediction" class="view-panel">
+          <div class="section-header">
+            <h2>Flood Risk AI Prediction Sandbox</h2>
+            <span class="subtitle">Hydrological simulation calibrated to current region inputs</span>
+          </div>
+
+          <div class="grid-prediction">
+            <div class="panel-box">
+              <h3 id="predictionRegionHeader">Regional Simulation Variables</h3>
+              <form id="predictionForm" class="form-grid">
+                <div class="form-group">
+                  <label>Simulated Rainfall (mm/hr)</label>
+                  <input type="range" id="paramRain" min="0" max="150" value="65" />
+                  <span class="range-val" id="valRain">65 mm/hr</span>
+                </div>
+                <div class="form-group">
+                  <label>Current Discharge Rate (m³/s)</label>
+                  <input type="number" class="input-ctrl" id="dischargeInput" value="18.5" step="0.5" />
+                </div>
+                <div class="form-group">
+                  <label>Catchment Strata Composition</label>
+                  <select class="input-ctrl">
+                    <option>Saturated Loam (High Retention)</option>
+                    <option>Granite Rock Ridge (Immediate Runoff)</option>
+                    <option>Mixed Forest Catchment</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Topographical Pass Angle</label>
+                  <select class="input-ctrl">
+                    <option>Steep Foothills (> 40° Slope)</option>
+                    <option>Intermediate Basin</option>
+                    <option>Lowland Floodplain</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-primary btn-full" id="runSimBtn">
+                  Compute Flood Probability
+                </button>
+              </form>
+            </div>
+
+            <div class="panel-box result-box">
+              <h3>Runoff Risk Assessment</h3>
+              <div class="prediction-score-display">
+                <div class="score-dial text-red" id="simScore">74%</div>
+                <p class="score-verdict" id="simVerdict">Flash Surge Likely within <strong>60-90 mins</strong></p>
+              </div>
+              <div class="model-meta">
+                <div class="meta-row"><span>Baseline Algorithm:</span> <strong>HEC-RAS ML Runoff</strong></div>
+                <div class="meta-row"><span>Active Basin:</span> <strong id="predActiveBasin">Imphal Catchment</strong></div>
+                <div class="meta-row"><span>Operational Response:</span> <strong class="text-red" id="predRecommendation">Stage-2 Valley Evacuation</strong></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Interactive Regional Flood Map View -->
+        <section id="view-map" class="view-panel">
+          <div class="section-header">
+            <h2>Regional Watershed Inundation Map</h2>
+            <span class="subtitle">Live high-resolution topographic projection for the searched region</span>
+          </div>
+
+          <div class="map-view-layout">
+            <div class="map-container-enhanced">
+              <div id="regionalFloodMap"></div>
+              
+              <div class="map-floating-card">
+                <h4 id="mapFloatingTitle">Catchment Basin Gauge</h4>
+                <div class="level-indicator">
+                  <span class="big-stat" id="mapGaugeLevel">4.2 m</span>
+                  <span class="status-pill danger" id="mapGaugeStatusPill">Critical Crest</span>
+                </div>
+                <p id="mapSensorNote">Topographic stream confluence shows high accumulation in valley bottom.</p>
+                <button class="btn btn-xs btn-primary" onclick="switchTab('view-dashboard')">View Sensor Graphs</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Early Warning System View -->
+        <section id="view-warning" class="view-panel">
+          <div class="alert-banner-extreme" id="warningBanner">
+            <i class="fa-solid fa-triangle-exclamation banner-icon" id="warningBannerIcon"></i>
+            <div>
+              <h2 id="warningHeadline">CRITICAL FLASH FLOOD SURGE IMMINENT</h2>
+              <p id="warningDescription">Sustained precipitation detected in upper ridge. Downhill flood propagation expected rapidly.</p>
+            </div>
+          </div>
+
+          <div class="grid-2-col warning-controls">
+            <div class="panel-box">
+              <h3>Mass Broadcast Dispatch Channels</h3>
+              <p class="broadcast-desc">Activate regional civil protection protocols to instantly transmit notifications to vulnerable citizens:</p>
+              <div class="toggle-list">
+                <label class="toggle-item">
+                  <div class="toggle-info">
+                    <span class="toggle-title">Emergency Cell Broadcast (SMS Push)</span>
+                    <span class="toggle-sub">Sends high-priority geo-targeted cellular alert to all phones</span>
+                  </div>
+                  <input type="checkbox" id="chkSms" checked />
+                </label>
+                <label class="toggle-item">
+                  <div class="toggle-info">
+                    <span class="toggle-title">Acoustic Siren Array (Ridge &amp; Valley)</span>
+                    <span class="toggle-sub">Auto-triggers elevated sirens located across mountain choke points</span>
+                  </div>
+                  <input type="checkbox" id="chkSiren" checked />
+                </label>
+                <label class="toggle-item">
+                  <div class="toggle-info">
+                    <span class="toggle-title">Emergency Radio Frequency Override</span>
+                    <span class="toggle-sub">Interrupts public radio FM/AM frequencies with voice evacuation order</span>
+                  </div>
+                  <input type="checkbox" id="chkRadio" checked />
+                </label>
+                <label class="toggle-item">
+                  <div class="toggle-info">
+                    <span class="toggle-title">First Responder Tactical Mesh Network</span>
+                    <span class="toggle-sub">Sends distress beacon to Police, Medics, and Search Teams</span>
+                  </div>
+                  <input type="checkbox" id="chkMesh" checked />
+                </label>
+              </div>
+              <button class="btn btn-danger btn-full" id="dispatchBroadcastBtn" style="margin-top: 1.5rem;">
+                <i class="fa-solid fa-tower-broadcast"></i> Dispatch Early Warning Broadcast
+              </button>
+            </div>
+
+            <div class="panel-box">
+              <h3>Tactical Action Directives</h3>
+              <ul class="directive-list" id="tacticalDirectives">
+                <li><i class="fa-solid fa-check-circle text-green"></i> Inspect weir gates and downstream runoff channels.</li>
+                <li><i class="fa-solid fa-check-circle text-green"></i> Alert settlements along major river banks.</li>
+                <li><i class="fa-solid fa-triangle-exclamation text-yellow"></i> Restrict civilian crossing on low bridges.</li>
+                <li><i class="fa-solid fa-circle-xmark text-red"></i> Issue evacuation for inundation zones.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Alert Center View -->
+        <section id="view-alerts" class="view-panel">
+          <div class="section-header">
+            <h2>Alert Center &amp; Threat Notifications</h2>
+            <span class="subtitle">Real-time status updates based on calculated flood probability</span>
+          </div>
+          <div class="alerts-feed" id="alertsFeedContainer">
+            <!-- Dynamic alerts and Safe notifications populate here -->
+          </div>
+        </section>
+
+        <!-- 7. Emergency Response View -->
+        <section id="view-emergency" class="view-panel">
+          <div class="section-header">
+            <h2>Emergency Operations &amp; Regional Logistics</h2>
+            <span class="subtitle">Real-time deployment of response personnel, high-ground shelters, and evacuations</span>
+          </div>
+
+          <div class="metrics-row">
+            <!-- Search and Rescue Metric -->
+            <div class="metric-card" id="cardSearchRescue">
+              <div class="card-icon"><i class="fa-solid fa-person-military-pointing"></i></div>
+              <div class="card-info">
+                <span class="label">Mobilized Search &amp; Rescue</span>
+                <span class="value" id="valSearchTeams">0 Teams</span>
+                <span class="subtext" id="subSearchTeams">Standby &bull; Zero flood threat</span>
+              </div>
+            </div>
+
+            <!-- Designated High-Ground Shelters (Interactive Button) -->
+            <div class="metric-card shelter-interactive-card" id="btnShowShelterMap" title="Click to view high-ground shelter coordinates">
+              <div class="card-icon"><i class="fa-solid fa-mountain-city"></i></div>
+              <div class="card-info">
+                <div class="shelter-head-row">
+                  <span class="label">Designated High-Ground Shelters</span>
+                  <span class="badge-tag" id="shelterActionTag">Click to Map</span>
+                </div>
+                <span class="value" id="valShelters">0 Ready</span>
+                <span class="subtext" id="subShelters">No shelters required</span>
+              </div>
+            </div>
+
+            <!-- Evacuation Capacity Metric -->
+            <div class="metric-card" id="cardEvacuation">
+              <div class="card-icon"><i class="fa-solid fa-users"></i></div>
+              <div class="card-info">
+                <span class="label">Evacuation Capacity</span>
+                <span class="value" id="valEvacuees">0 Persons</span>
+                <span class="subtext" id="subEvacuees">No evacuation orders</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC HIGH-GROUND SHELTERS MAP CONTAINER -->
+          <div class="panel-box shelter-map-wrapper" id="shelterMapSection" style="display: none;">
+            <div class="panel-head">
+              <div>
+                <h3 id="shelterMapTitle"><i class="fa-solid fa-mountain"></i> Safe High-Ground Shelters for Evacuation</h3>
+                <span class="subtitle">Safest and nearest elevated refuge centers to the flood-prone basin</span>
+              </div>
+              <button class="btn btn-xs btn-outline" id="closeShelterMapBtn"><i class="fa-solid fa-xmark"></i> Close Map</button>
+            </div>
+            <div class="shelter-map-container">
+              <div id="shelterLeafletMap"></div>
+            </div>
+            <div class="shelter-list-grid" id="shelterListGrid"></div>
+          </div>
+        </section>
+
+        <!-- 8. GLOBAL NEWS VIEW (NEW SECTION) -->
+        <section id="view-news" class="view-panel">
+          <div class="section-header">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <h2>Global News &amp; Unfolding Incidents</h2>
+                <span class="subtitle">Live open-source intelligence and real-time world headlines</span>
+              </div>
+              <button class="btn btn-sm btn-outline" id="refreshNewsBtn">
+                <i class="fa-solid fa-rotate"></i> Refresh Feed
+              </button>
+            </div>
+          </div>
+
+          <!-- NEWS SEARCH & TOPIC BAR -->
+          <div class="panel-box news-controls-wrapper">
+            <div class="search-bar-container">
+              <div class="search-input-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input 
+                  type="text" 
+                  id="newsPlaceInput" 
+                  placeholder="Search live news for any place (e.g. India, Japan, Spain, USA, Brazil, London)..." 
+                  autocomplete="off"
+                />
+                <button class="btn btn-primary btn-sm" id="searchNewsBtn">
+                  <i class="fa-solid fa-globe"></i> Search News
+                </button>
+              </div>
+            </div>
+
+            <!-- Category Navigation Buttons -->
+            <div class="news-category-pills">
+              <button class="category-btn active" data-category="all">
+                <i class="fa-solid fa-bolt"></i> All Stories
+              </button>
+              <button class="category-btn" data-category="disaster">
+                <i class="fa-solid fa-cloud-bolt"></i> Disasters &amp; Climate
+              </button>
+              <button class="category-btn" data-category="entertainment">
+                <i class="fa-solid fa-film"></i> Entertainment &amp; Pop
+              </button>
+              <button class="category-btn" data-category="food">
+                <i class="fa-solid fa-utensils"></i> Food &amp; Culinary
+              </button>
+              <button class="category-btn" data-category="racing">
+                <i class="fa-solid fa-flag-checkered"></i> Motorsport &amp; Racing
+              </button>
+              <button class="category-btn" data-category="fighting">
+                <i class="fa-solid fa-hand-fist"></i> Combat Sports &amp; MMA
+              </button>
+              <button class="category-btn" data-category="tech">
+                <i class="fa-solid fa-microchip"></i> Technology &amp; AI
+              </button>
+              <button class="category-btn" data-category="world">
+                <i class="fa-solid fa-earth-americas"></i> Geopolitics
+              </button>
+            </div>
+          </div>
+
+          <!-- Current News Feed Status Bar -->
+          <div class="news-status-bar">
+            <span>Showing live feeds for: <strong id="activeNewsLocationLabel">Global / Worldwide</strong></span>
+            <span class="news-counter" id="newsCountLabel">Loading articles...</span>
+          </div>
+
+          <!-- NEWS ARTICLES GRID -->
+          <div class="news-cards-grid" id="newsCardsGrid">
+            <!-- Article Cards populate here dynamically -->
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ARTICLE READER MODAL -->
+  <div class="modal-overlay" id="articleModalOverlay">
+    <div class="modal-box article-reader-modal">
+      <div class="modal-header">
+        <div class="reader-meta">
+          <span class="pill-badge" id="readerCategory">Category</span>
+          <span class="reader-source" id="readerSource">Source</span>
+        </div>
+        <button class="btn-close-modal" id="closeReaderModalBtn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body reader-body">
+        <img src="" id="readerImage" class="reader-image" alt="Article Banner" />
+        <h2 id="readerTitle" class="reader-title">Headline</h2>
+        <div class="reader-time" id="readerTime">Time</div>
+        <p id="readerText" class="reader-content">Full story content...</p>
+        <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="readerExternalLink">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Read Full Original Coverage
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMERGENCY SOS MODAL POPUP -->
+  <div class="modal-overlay" id="sosModalOverlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="sos-head">
+          <i class="fa-solid fa-triangle-exclamation text-red pulse-icon"></i>
+          <div>
+            <h3>Emergency SOS Backup Dispatch</h3>
+            <span class="subtitle" id="sosModalRegion">Region: Imphal Valley</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" id="closeSosModalBtn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="sos-alert-box">
+          <i class="fa-solid fa-phone-volume"></i>
+          <div>
+            <strong>Instant Backup Hotline</strong>
+            <p>Direct lines to nearest local emergency rescue, police station, and field medics:</p>
+          </div>
+        </div>
+
+        <div class="sos-contact-list" id="sosContactList"></div>
+
+        <div class="citizen-early-warning-box">
+          <h4><i class="fa-solid fa-bullhorn"></i> Citizen Imminent Flood Alert</h4>
+          <p>Witnessing a sudden crest surge or dam failure? Report immediately to notify official disaster dispatchers:</p>
+          <button class="btn btn-danger btn-full" id="citizenTriggerWarningBtn">
+            <i class="fa-solid fa-satellite-dish"></i> Report Imminent Flood &amp; Fire Early Warning
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
