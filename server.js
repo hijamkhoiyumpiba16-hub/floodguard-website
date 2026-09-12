@@ -1,15 +1,34 @@
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 require("dotenv").config();
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { WebSocketServer } = require("ws");
+const mongoose = require("mongoose");
+const { WebSocketServer } = require("ws"); 
+
+// Models
+const AlertLog = require("./models/AlertLog");         // <-- ADD THIS
+
+const TelemetryLog = require("./models/TelemetryLog");
 
 const { getWeatherData } = require("./services/weatherService");
 const { calculateHydrology, generateShelters } = require("./services/riskEngine");
 const { getNews } = require("./services/newsService");
 
 const app = express();
+// --- MongoDB Atlas Connection ---
+const MONGO_URI = process.env.MONGO_URI;
+if (MONGO_URI) {
+  mongoose
+    .connect(MONGO_URI)
+    .then(() => console.log(" Connected to MongoDB Atlas"))
+    .catch((err) => console.error(" MongoDB Connection Error:", err.message));
+} else {
+  console.warn(" Warning: No MONGO_URI found in .env file");
+}
+// ---------------------------------
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -124,7 +143,49 @@ app.get("/api/news", async (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({ status: "ONLINE", timestamp: new Date().toISOString() });
 });
+// --- ADMIN DASHBOARD APIs ---
 
+// 1. Get summary counters and high-risk logs
+app.get("/api/admin/metrics", async (req, res) => {
+  try {
+    const totalAlerts = await AlertLog.countDocuments();
+    const activeSosCount = await AlertLog.countDocuments({ isCitizenSOS: true });
+    const recentTelemetry = await TelemetryLog.find().sort({ recordedAt: -1 }).limit(10);
+    const criticalIncidents = await AlertLog.find().sort({ createdAt: -1 }).limit(10);
+
+    res.json({
+      metrics: {
+        totalAlerts,
+        activeSosCount,
+        criticalRegions: recentTelemetry.filter(t => t.riskPercent > 70).length
+      },
+      recentTelemetry,
+      criticalIncidents
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load admin metrics: " + err.message });
+  }
+});
+
+// 2. Resolve / Clear an alert from the database
+app.delete("/api/admin/alert/:id", async (req, res) => {
+  try {
+    await AlertLog.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "Incident cleared" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete incident: " + err.message });
+  }
+});
+
+// 3. Purge historical telemetry data (maintenance)
+app.post("/api/admin/purge-telemetry", async (req, res) => {
+  try {
+    await TelemetryLog.deleteMany({});
+    res.json({ success: true, message: "Historical telemetry purged" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Start Server
 server.listen(PORT, () => {
   console.log(`FloodGuard Backend Engine listening on http://localhost:${PORT}`);
